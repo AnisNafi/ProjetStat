@@ -1,0 +1,388 @@
+---
+title: "Projet"
+output: html_document
+---
+HADJ ARAB Anis - BODIANG Assane
+
+Sujet: Morts recens??es aux ??tats-Unis du a la drogue:
+
+
+
+```{r}
+df1 <- read.csv("data2.csv" );
+df1$CaseNumber <- NULL;
+df1$Residence.State <- NULL;
+df1$Residence.City <- NULL;
+df1$Residence.County <- NULL;
+df1$Death.State <- NULL;
+df1$Death.County <- NULL;
+df1$Location <- NULL;
+df1$DescriptionofInjury <- NULL;
+df1$InjuryPlace <- NULL;
+df1$AmendedMannerofDeath <- NULL;
+head(df1);
+```
+
+
+L'objectif de notre projet est d'essayer de voir l'evolution du nombre des morts au cours des annees dans le but de proposer des explications a ces evolutions.
+
+I) Etude du Connecticut:
+
+Donc tout d'abord, avant de faire une etude sur tout le territoire, nous avons decide de faire une etude au niveau du Connecticut entre 2012 et 2016 (comme vu sur la map qui suit):
+
+
+```{r}
+library(ggmap)
+library(maptools)
+library(maps)
+
+```
+
+Pour recuperer les coordonnees du Lieu de mort (et donc de la region etudiee), nous avons utilise gsub qui nous permet de substituer les elements d'une String par un autre element (ici ""), pour cela nous utilisons des ecritures regulieres comme vu ci-dessous:
+
+```{r}
+df2 <- df1 %>% 
+  mutate(DeathLon = gsub("^.*\n","",DeathLoc)) %>%
+  mutate(DeathLon = gsub(",.*$","",DeathLon)) %>%
+  mutate(DeathLon = gsub("^.","",DeathLon))%>% 
+  mutate(DeathLat = gsub("^.*\n","",DeathLoc)) %>%
+  mutate(DeathLat = gsub("^.*,","",DeathLat)) %>%
+  mutate(DeathLat = gsub(".$","",DeathLat)) %>%
+  mutate(DeathLat = as.numeric(DeathLat)) %>%
+  mutate(DeathLon = as.numeric(DeathLon));
+```
+1- Carte des USA
+
+Par la suite nous utilisons library(ggmap), library(maptools), library(maps) pour plot une map des USA sur laquelle nous allons rajouter les coordonnes recuperee. Bien evidemment, ce que nous obtenons est l'Etat du Connecticut sachant que l'etude a ete faite dessus:
+
+```{r}
+mapWorld <- borders("usa", colour="gray50", fill="gray50") # create a layer of borders
+mp <- ggplot() +   mapWorld
+mp <- mp + geom_point(aes(x = DeathLat, y = DeathLon), data=df2 ,color="blue", size=3);
+mp
+```
+
+
+2- Quelques chiffres:
+
+Tout d'abord, nous avons fait un sommaire des ages comme vu ci-dessous: on voit que l'age min est de 14 et max de 87 (des chiffres assez choquant pour des abus de drogue..)
+
+
+```{r}
+summary(df1$Age);
+```
+
+
+```{r}
+library(dplyr);
+library(magrittr);
+```
+
+
+Nous utilisons la librairie dplyr pour mieux etudier notre base. Croyant que la moyenne des ages entre les hommes et femmes morts de drogue est differente, nous avons essaye de comparer pour essayer de voir si l'on peut separer nos etudes par Sexe, cependant la moyenne est tres proche et donc cela n'aide pas:
+
+
+```{r}
+df1 %>% arrange(Date) %>%
+  filter(Age != "NA", Sex !="") %>%
+  group_by(Sex) %>%
+  summarise(mean_age = mean(Age));
+```
+
+Cependant, n'etant pas convincus qu'il n'y ai pas de difference, nous avons calcule le nombre morts par Sexe. Et nous voyons clairement que la difference est tres grande (presque 3 fois plus) et cela pourrait peut-etre etre explique par le mode de vies differents (hypothese: les femmes sont plus raisonnables ayant peut etre plus peur de l'interdit)
+
+
+
+```{r}
+df1 %>% filter(Sex != "") %>%
+  group_by(Sex) %>% 
+  summarise(N = n());
+            
+```
+
+3-Graphes des morts par rapport au temps:
+
+Nous avons essaye de recuperer juste les Hommes qui consomment de l'Heroine et nous avons essaye de les arranger par date. Cela nous a permis de nous rendre compte que la date est du type factor et donc nos valeurs ne sont pas arrangee par ordre de date (nous ne pouvons donc pas faire de graphe par rapport a la date):
+
+
+```{r}
+df1 %>% filter(Sex == "Male", Heroin =="Y", Age !="NA") %>% 
+  arrange(Date);
+```
+
+Grace a la libraire as et a la commande as.Date, nous avons reussi a transformer notre facteur Date en un type Date qui peut etre plus facilement manipule.
+Ce qui nous permettra de faire plus facilement nos futurs graphes. Par exemple le graphe Du nombre des morts par jour suivant:
+
+
+```{r}
+df3 <- df2 %>% mutate(Date = as.Date(Date, format="%m/%d/%Y"));
+
+df4 <- df3 %>% filter(Sex != "") %>%
+  arrange(Date) %>%
+  mutate(Annee = gsub("-.*$","",Date)) %>%
+  filter(Annee != 'NA');
+mois <- strftime(df4$Date, "%m%Y");
+
+df4 <- df4 %>% mutate(Mois = mois);
+
+df4 %>% 
+  group_by(Date) %>%
+  summarise(N=n()) %>%
+  ggplot(aes(x=Date, y=N)) + geom_line()
+
+```
+
+Nous avons par la suite fait un graphe mensuelle dans l'espoir d'avoir de meilleurs valeures. Nous avons reussi a recuperer le mois grace la commande suivante: mois <- strftime(df4$Date, "%m%Y")
+
+Celle-ci recupere les elements qu'on choisi dans du type Date.
+
+
+```{r}
+
+df4 %>% 
+  group_by(Mois) %>%
+  summarise(N=n()) %>%
+  ggplot(aes(x=N, y=Mois)) + geom_point()
+
+
+```
+Enfin grace a cette commande et gsub
+mutate(Annee = gsub("-.*$","",Date)), nous avons recupere seulement l'annee et nous avons fait le graphe avec le nombre de morts annuel au Connecticut. Ce graphe nous montre bien mieux l'evolution qui a eu lieu entre 2012 a 2016. Il montre une multiplication de 3 fois du nombre de mort en 4 ans!!
+
+```{r}
+
+df4 %>% 
+  group_by(Annee) %>%
+  summarise(N=n()) %>%
+  ggplot(aes(x=Annee, y=N)) + geom_point()
+
+
+```
+
+Voici le tableau des valeurs qu'il ya dans le graphe precedent:
+
+```{r}
+
+df4 %>% 
+  group_by(Annee) %>%
+  summarise(N=n()) %>%
+  mutate(N)
+```
+Enfin, voici le graphe de l'evolution du nombre de mort par Sexe, ceci confirme bien ce que nous avons vu precedemment(3 fois plus d'hommes que de femmes morts). De plus, on voit que la pente d'evolution est plus grande pour les Hommes et donc la quatite de morts augmente bien plus que celle des Femmes.
+
+```{r}
+
+df4 %>% 
+  group_by(Annee, Sex) %>%
+  summarise(N=n()) %>%
+  ggplot(aes(x=Annee, y=N)) + geom_point(aes(colour = Sex))
+
+
+```
+
+4- Graphe des morts selon la drogue utilisee:
+
+Ne sachant pas comment trasformer mes colonnes de chaque drogue en une ligne par rapport a chaque mort, nous avons decide de creer un data frame dans lequel on met dans la premiere colonne le nom des drogues et dans la seconde le nombre de morts pour chacune de ces drogues.
+
+Pour cela, nous avons tout d'abord, recupere le nombre de mort pour chaque drogue separement  (sachant la nature du data frame de base nous ne pouvions pas les recuperer en meme temps):
+
+```{r}
+drug1 <- df5 %>%
+  filter(Heroin=='Y') %>%
+  summarise(Heroin=n())
+
+
+drug2 <- df5 %>%
+  filter(Cocaine=='Y') %>%
+  summarise(Cocaine=n())
+
+drug3 <- df5 %>%
+  filter(Fentanyl=='Y') %>%
+  summarise(Fentanyl=n())
+
+drug4 <- df5 %>%
+  filter(Oxycodone=='Y') %>%
+  summarise(Oxycodone=n())
+
+drug5 <- df5 %>%
+  filter(Oxymorphone=='Y') %>%
+  summarise(Oxymorphone=n())
+
+drug6 <- df5 %>%
+  filter(EtOH=='Y') %>%
+  summarise(EtOH=n())
+
+drug7 <- df5 %>%
+  filter(Hydro.codeine=='Y') %>%
+  summarise(Hydro.codeine=n())
+
+drug8 <- df5 %>%
+  filter(Benzodiazepine=='Y') %>%
+  summarise(Benzodiazepine=n())
+
+drug9 <- df5 %>%
+  filter(Methadone=='Y') %>%
+  summarise(Methadone=n())
+
+drug10 <- df5 %>%
+  filter(Amphet=='Y') %>%
+  summarise(Amphet=n())
+
+drug11 <- df5 %>%
+  filter(Tramad=='Y') %>%
+  summarise(Tramad=n())
+
+drug12 <- df5 %>%
+  filter(Morphine..not.heroin.=='Y') %>%
+  summarise(Morphine..not.heroin.=n())
+
+
+
+
+  
+
+```
+
+Par la suite, nous avons utilise data.frame pour creer le data frame voulu:
+
+```{r}
+
+drug <-data.frame(
+  Drugs = c("Heroin","Cocaine","Fentanyl","Oxycodone","Oxymorphone","EtOH","Hydro.codeine","Benzodiazepine","Methadone","Amphet","Tramad","Morphine..not.heroin."),
+  NbDeaths = c(drug1$Heroin,drug2$Cocaine,drug3$Fentanyl,drug4$Oxycodone,drug5$Oxymorphone,drug6$EtOH,drug7$Hydro.codeine,drug8$Benzodiazepine,drug9$Methadone,drug10$Amphet,drug11$Tramad,drug12$Morphine..not.heroin.)
+)
+
+```
+
+Enfin, nous avons plot nos resultats dans le graphe suivant en bar (car nous pensons que cela est plus pertinent):
+
+```{r}
+drug %>%
+  group_by(NbDeaths) %>%
+  ggplot(aes(x=Drugs, y=NbDeaths)) + geom_bar(stat="identity") + coord_flip()
+  
+
+```
+
+5- Graphe par groupe ethnique:
+
+Finalement, pour avoir une etude plus concrete et complete, nous avons decide d'etudier l'ethnicite aussi (ce que nous voulions pas faire au depart) et donc nous avons cree un graphe qui reprensente le nombre de morts durant cette periode de 4 ans par groupe ethinique.
+Ce que nous avons obtenus montre tres clairement que le nombre de morts aux USA est largement plus elevee pour les Blancs(plus de 5 fois plus eleve que le second groupe: Hispanics). Plusieurs raisons peuvent expliquer ca, cependant sachant que les chiffres recuperes sont au Connecticut, nous ne pouvons faire de conclusions hatives. Nous conclurons dessus a la fin.
+
+```{r}
+df1 %>% 
+  filter(Race != "Unknown", Race != "") %>%
+  group_by(Race) %>%
+  summarise(N=n()) %>%
+  ggplot(aes(x=Race, y=N)) + geom_bar(stat="identity") + coord_flip()
+```
+
+II) Etude Au niveau National 
+
+```{r}
+d <- read.csv("drugusa.csv");
+head(d)
+
+```
+
+1- Comparaison Population/Mort
+
+Tout d'abord, nous avons essayer de mettre le graphe de l'evolution de la population et des morts dans un meme graphe comme ci-dessous:
+
+```{r, height=5, width = 10}
+d %>% 
+  filter(Population != 'NA') %>%
+  filter(State!='United States') %>%
+  group_by(Year) %>%
+  summarise_each(funs(sum), Population, Deaths) %>%
+  ggplot(aes(x=Year, y=Population)) + geom_line(aes(y = Population, colour="Pop")) + geom_line(aes(y = Deaths, colour="Death"))
+
+```
+
+Cependant, la disparite des valeurs est tellement grande que l'on ne peut juger dessus. Nous avons donc separe les deux graphe.
+entre 1999 et 2014, on voit que le taux de morts est presque 4 fois plus grand en 2014.
+
+```{r}
+
+
+det <- d %>% 
+  group_by(Year) %>%
+  filter(Deaths != 'NA') %>%
+  summarise(Deaths=sum(Deaths)) ;
+
+det %>% ggplot(aes(x=Year, y=Deaths)) + geom_point();
+
+```
+
+Alors que le la pulation a augmente que de 1,2 fois et donc l'augmentation de la population n'est pas la seule raison de l'augmentation du nombre des morts. D'autres raison peuvent exister, mais comme dit precedemment (prob eco par ex), nous n'avons pas assez d'etuder pour proposer des hypotheses concretes face a ce probleme.
+
+
+```{r}
+
+pop <- d %>% 
+  filter(Population != 'NA') %>%
+  filter(State!='United States') %>%
+  group_by(Year) %>%
+  summarise(Population=sum(as.numeric(Population))) %>%
+  ggplot(aes(x=Year, y=Population)) + geom_point(aes(y = Population, colour="Pop"))
+
+pop
+```
+
+Ici, nous avons refait la meme etude mais en separant par Sexe comme dans la premiere partie. On voit bien que, comme precedemment, le nombre de morts masculins est bien plus large que feminins (2 fois plus). Neanmois, ces graphe nous ont montre que la pupulation feminine est superieure a la pop masculine et donc ca renforce notre croyance a notre hypothese de depart (car dans les meme conditions de vie, les femmes se droguent moins)
+
+```{r}
+pop2 <- d %>% 
+  filter(Population != 'NA') %>%
+  filter(State=='United States', Sex!='Both sexes') %>%
+  group_by(Year,Sex) %>%
+  summarise_each(funs(sum), Population, Deaths) 
+
+pop2 %>% ggplot(aes(x=Year, y=Population)) + geom_line(aes(y = Population, colour=Sex)) + geom_point(aes(y = Deaths, colour=Sex))
+pop2 %>% ggplot(aes(x=Year, y=Population)) + geom_line(aes(y = Population, colour=Sex))
+pop2 %>% ggplot(aes(x=Year, y=Deaths)) + geom_line(aes(colour=Sex))
+```
+Ensuite, nous avons fait un graphe de l'evolution du nombre de mort par groupe ethinique par rapport au temps (entre 1999 et 2014). Celui-ci confirme ce que nous avons trouve tout a l'heure qui est que le nombre de morts blancs est superieures aux autres et malgre le fait que leur population est largement superieure, on voit une nette augmentation de leur nombre de morts entre 1999 et 2014 (3 fois plus) et donc ceci montre une forte augmentation de leur consommation par rapport aux autre groupes. Compare a eux, les autres groupes ont de tres faibles taux de deces et une tres faible augmentation de ce taux. 
+
+Hypothese: 
+- Les autres ethnies que blancs consomment moins les drogues dures 
+- Des differences physionomique (ex: resistance physique de ces groupes face aux substances externes et nossives)
+
+```{r}
+rad <- d %>% 
+  filter(Population != 'NA') %>%
+  filter(State=='United States', Race...Hispanic.Origin!='All Races-All Origins') %>%
+  group_by(Year,Race...Hispanic.Origin) %>%
+  summarise_each(funs(sum), Population, Deaths)
+
+rad %>% ggplot(aes(x=Year, y=Population)) + geom_line(aes(y = Population, colour=Race...Hispanic.Origin))
+rad %>% ggplot(aes(x=Year, y=Deaths)) + geom_line(aes(colour=Race...Hispanic.Origin))
+
+```
+
+Enfin, nous avons fait le meme type de graphe que precedemment, mais nous avons decide de nous concentrer sur les fourchettes d'age:
+Nous avons remarque d'abord qu'il y a des morts de moins de 14 ans!
+De plus, les groupes d'ages les plus touches sont entre 25 et 54 ans et ne cessent d'augmenter et les plus touches sont les personnes entre 45 et 55 ans. 
+
+Ceci nous montre que les drogues dures sont de plus en plus presentent et consommees de nos jours (effet de mode peut etre; par ex: des jeunes qui font la fetes ou des adultes pouvent diminuer leur stresse), et il faudrait donc renforcer les mesures prises face a ce probleme qui continue d'augmenter!!
+
+```{r}
+pop3 <- d %>% 
+  filter(Population != 'NA') %>%
+  filter(State=='United States', Age!='All Ages') %>%
+  group_by(Year,Age) %>%
+  summarise_each(funs(sum), Population, Deaths)
+
+pop3 %>% ggplot(aes(x=Year, y=Population)) + geom_line(aes(y = Population, colour=Age))
+
+pop3 %>% ggplot(aes(x=Year, y=Deaths)) + geom_line(aes(colour=Age))
+
+```
+
+
+
+
+
+
+
+
